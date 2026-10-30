@@ -30,6 +30,7 @@ $end_info$
 #include "Interface/IR/RegisterAllocationData.h"
 #include "Utils/Allocator.h"
 #include "Utils/Allocator/HostAllocator.h"
+#include "Utils/crc32.h"
 #include <FEXCore/Utils/SpinWaitLock.h>
 #include "Utils/variable_length_integer.h"
 
@@ -76,9 +77,6 @@ $end_info$
 #include <unordered_map>
 #include <utility>
 #include <xxhash.h>
-#if defined(ARCHITECTURE_arm64)
-#include <arm_acle.h>
-#endif
 
 namespace FEXCore::Context {
 ContextImpl::ContextImpl(const FEXCore::HostFeatures& Features)
@@ -92,7 +90,7 @@ ContextImpl::ContextImpl(const FEXCore::HostFeatures& Features)
 
   if (Config.BlockJITNaming() || Config.GlobalJITNaming() || Config.LibraryJITNaming()) {
     // Only initialize symbols file if enabled. Ensures we don't pollute /tmp with empty files.
-    Symbols.InitFile();
+    Symbols.InitFile(Features.ProcessPID);
   }
 
   uint64_t FrequencyCounter = FEXCore::GetCycleCounterFrequency();
@@ -106,6 +104,14 @@ ContextImpl::ContextImpl(const FEXCore::HostFeatures& Features)
 
   // Track atomic TSO emulation configuration.
   UpdateAtomicTSOEmulationConfig();
+
+#ifndef _WIN32
+  // Check if the kernel supports getrandom().
+  uint64_t Probe {};
+  HostRNGAvailable = FHU::Syscalls::getrandom(&Probe, sizeof(Probe), 0) == sizeof(Probe);
+#else
+  HostRNGAvailable = true;
+#endif
 
   DiskCache.Init(this);
 }
@@ -523,6 +529,8 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
 
   bool HasCustomIR {};
 
+  bool WantsDiskCachePatching = DiskCache.IsReadingDiskCache() || DiskCache.IsWritingDiskCache();
+
   if (HasCustomIRHandlers.load(std::memory_order_relaxed)) {
     std::shared_lock lk(CustomIRMutex);
     auto Handler = CustomIRHandlers.find(GuestRIP);
@@ -637,27 +645,11 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
           auto ExistingCodePtr = reinterpret_cast<uint8_t*>(Block.Entry + BlockInstructionsLength);
           auto InstAddressReg = Thread->OpDispatcher->_EntrypointOffset(GPRSize, InstAddress - GuestRIP);
 
-          auto crc32 = [](const uint8_t* Ptr, size_t Size) -> uint32_t {
-#if defined(ARCHITECTURE_arm64)
-            uint32_t Result {};
-#define do_crc(type, suffix)                                               \
-  while (Size >= sizeof(type)) {                                           \
-    Result = __crc32##suffix(Result, *reinterpret_cast<const type*>(Ptr)); \
-    Ptr += sizeof(type);                                                   \
-    Size -= sizeof(type);                                                  \
-  }
-            do_crc(uint64_t, d);
-            do_crc(uint32_t, w);
-            do_crc(uint16_t, h);
-            do_crc(uint8_t, b);
-            return Result;
-#else
-            // Unsupported on non-arm.
-            return 0;
-#endif
-          };
-          auto CodeChanged = Thread->OpDispatcher->_ValidateCode(
-            Thread->OpDispatcher->Constant(crc32(ExistingCodePtr, DecodedInfo->InstSize)), InstAddressReg, DecodedInfo->InstSize);
+          auto Value = FEXCore::Utils::crc32(ExistingCodePtr, DecodedInfo->InstSize);
+          auto CRC = WantsDiskCachePatching ?
+                       Thread->OpDispatcher->_PatchableGuestCRC(IR::OpSize::i64Bit, Value, (int64_t)ExistingCodePtr, DecodedInfo->InstSize) :
+                       Thread->OpDispatcher->Constant(Value);
+          auto CodeChanged = Thread->OpDispatcher->_ValidateCode(CRC, InstAddressReg, DecodedInfo->InstSize);
 
           auto InvalidateCodeCond = Thread->OpDispatcher->CondJump(CodeChanged);
 
@@ -669,11 +661,10 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
           Thread->OpDispatcher->StartNewBlock();
 
           // Generate a relocatable entry for invalidation purposes.
-          auto EntryReg = Thread->OpDispatcher->_EntrypointOffset(GPRSize, 0);
-          Thread->OpDispatcher->_ThreadRemoveCodeEntry(EntryReg);
-
-          // Exit the function at this instruction after invalidation.
-          Thread->OpDispatcher->ExitFunction(Thread->OpDispatcher->_InlineEntrypointOffset(GPRSize, InstAddress - GuestRIP));
+          auto EntryToInvalidate = Thread->OpDispatcher->_EntrypointOffset(GPRSize, 0);
+          auto NewRIP = Thread->OpDispatcher->_EntrypointOffset(GPRSize, InstAddress - GuestRIP);
+          // Invalidate and exit the function
+          Thread->OpDispatcher->_ThreadRemoveCodeEntry(EntryToInvalidate, NewRIP);
 
           auto NextOpBlock = Thread->OpDispatcher->CreateNewCodeBlockAfter(CurrentBlock);
 

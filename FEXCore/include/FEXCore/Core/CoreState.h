@@ -350,6 +350,7 @@ struct JITPointers {
   uint64_t MonoBackpatcherWrite {};
   uint64_t LUDIV {};
   uint64_t LDIV {};
+  uint64_t RDRANDFallback {};
   uint64_t ThunkCallbackRet {};
 
   // Handles returning/calling ARM64EC code from the JIT, expects the target PC in TMP3
@@ -370,6 +371,8 @@ struct JITPointers {
   uint64_t ExitFunctionLinker {};
   uint64_t ThreadStopHandlerSpillSRA {};
   uint64_t ThreadPauseHandlerSpillSRA {};
+  uint64_t ThreadDispatchSyscallHandler {};
+  uint64_t ThreadDispatchRemoveCodeEntry {};
   uint64_t GuestSignal_SIGILL {};
   uint64_t GuestSignal_SIGTRAP {};
   uint64_t GuestSignal_SIGSEGV {};

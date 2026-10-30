@@ -36,11 +36,11 @@ constexpr std::array<X86InstInfo[2], ENTRY_MAX> PrimaryGroup_ArchSelect_LUT = {{
     {"", TYPE_INVALID, FLAGS_NONE, 0, { .OpDispatch = nullptr } },
   },
   {
-    {"ADC",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SUPPORTS_LOCK, 1, { .OpDispatch = &IR::OpDispatchBuilder::Bind<&IR::OpDispatchBuilder::ADCOp, 1> }},
+    {"ADC",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SUPPORTS_LOCK, 1, { .OpDispatch = &IR::OpDispatchBuilder::Bind<&IR::OpDispatchBuilder::ADCOp, 1, false> }},
     {"", TYPE_INVALID, FLAGS_NONE, 0, { .OpDispatch = nullptr } },
   },
   {
-    {"SBB",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SUPPORTS_LOCK, 1, { .OpDispatch = &IR::OpDispatchBuilder::Bind<&IR::OpDispatchBuilder::SBBOp, 1> }},
+    {"SBB",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SUPPORTS_LOCK, 1, { .OpDispatch = &IR::OpDispatchBuilder::Bind<&IR::OpDispatchBuilder::SBBOp, 1, false> }},
     {"", TYPE_INVALID, FLAGS_NONE, 0, { .OpDispatch = nullptr } },
   },
   {
@@ -56,7 +56,7 @@ constexpr std::array<X86InstInfo[2], ENTRY_MAX> PrimaryGroup_ArchSelect_LUT = {{
     {"", TYPE_INVALID, FLAGS_NONE, 0, { .OpDispatch = nullptr } },
   },
   {
-    {"CMP",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST, 1, { .OpDispatch = &IR::OpDispatchBuilder::Bind<&IR::OpDispatchBuilder::CMPOp, 1> }},
+    {"CMP",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST, 1, { .OpDispatch = &IR::OpDispatchBuilder::Bind<&IR::OpDispatchBuilder::CMPOp, 1, false> }},
     {"", TYPE_INVALID, FLAGS_NONE, 0, { .OpDispatch = nullptr } },
   },
 }};
@@ -140,23 +140,23 @@ constexpr std::array<X86InstInfo, MAX_INST_GROUP_TABLE_SIZE> PrimaryInstGroupOps
     {OPD(TYPE_GROUP_2, OpToIndex(0xD1), 6), 1, X86InstInfo{"SHL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                                      0}},
     {OPD(TYPE_GROUP_2, OpToIndex(0xD1), 7), 1, X86InstInfo{"SAR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                                      0}},
 
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 0), 1, X86InstInfo{"ROL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 1), 1, X86InstInfo{"ROR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 2), 1, X86InstInfo{"RCL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 3), 1, X86InstInfo{"RCR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 4), 1, X86InstInfo{"SHL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 5), 1, X86InstInfo{"SHR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 6), 1, X86InstInfo{"SHL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 7), 1, X86InstInfo{"SAR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 0), 1, X86InstInfo{"ROL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 1), 1, X86InstInfo{"ROR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 2), 1, X86InstInfo{"RCL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 3), 1, X86InstInfo{"RCR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 4), 1, X86InstInfo{"SHL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 5), 1, X86InstInfo{"SHR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 6), 1, X86InstInfo{"SHL",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD2), 7), 1, X86InstInfo{"SAR",  TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                   0}},
 
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 0), 1, X86InstInfo{"ROL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 1), 1, X86InstInfo{"ROR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 2), 1, X86InstInfo{"RCL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 3), 1, X86InstInfo{"RCR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 4), 1, X86InstInfo{"SHL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 5), 1, X86InstInfo{"SHR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 6), 1, X86InstInfo{"SHL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
-    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 7), 1, X86InstInfo{"SAR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_SF_SRC_RCX,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 0), 1, X86InstInfo{"ROL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 1), 1, X86InstInfo{"ROR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 2), 1, X86InstInfo{"RCL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 3), 1, X86InstInfo{"RCR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 4), 1, X86InstInfo{"SHL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 5), 1, X86InstInfo{"SHR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 6), 1, X86InstInfo{"SHL",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
+    {OPD(TYPE_GROUP_2, OpToIndex(0xD3), 7), 1, X86InstInfo{"SAR",  TYPE_INST, FLAGS_MODRM | FLAGS_SF_MOD_DST,                                   0}},
 
     // GROUP 3
     {OPD(TYPE_GROUP_3, OpToIndex(0xF6), 0), 1, X86InstInfo{"TEST", TYPE_INST, GenFlagsSameSize(SIZE_8BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST,                                      1}},

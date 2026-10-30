@@ -102,11 +102,11 @@ struct TLS {
   uint64_t& CachedCallRetSp() const {
     return reinterpret_cast<uint64_t&>(TEB->TlsSlots[FEXCore::ToUnderlying(Slot::CACHED_CALLRET_SP)]);
   }
-};
 
-CHPE_V2_CPU_AREA_INFO*& GetCpuArea() {
-  return ((__TEB*)NtCurrentTeb())->ChpeV2CpuAreaInfo;
-}
+  CHPE_V2_CPU_AREA_INFO*& CpuArea() const {
+    return reinterpret_cast<__TEB*>(TEB)->ChpeV2CpuAreaInfo;
+  }
+};
 
 WOW64_CONTEXT* GetWow64Context() {
   WOW64_CONTEXT* WowContext;
@@ -118,13 +118,9 @@ struct FrontendThreadData {
   bool InLockedRWXRead {};
   CHPE_V2_CPU_AREA_INFO CpuArea {};
 
-  FrontendThreadData(FEXCore::Core::InternalThreadState* Thread) {
-    CpuArea.SuspendDoorbell = reinterpret_cast<ULONG*>(&Thread->CurrentFrame->SuspendDoorbell);
-    GetCpuArea() = &CpuArea;
-  }
-
-  ~FrontendThreadData() {
-    GetCpuArea() = nullptr;
+  FrontendThreadData(const TLS& TLS) {
+    CpuArea.SuspendDoorbell = reinterpret_cast<ULONG*>(&TLS.ThreadState()->CurrentFrame->SuspendDoorbell);
+    TLS.CpuArea() = &CpuArea;
   }
 };
 
@@ -355,12 +351,13 @@ bool HandleUnalignedAccess(CONTEXT* Context) {
 }
 
 void LockJITContext() {
-  GetCpuArea()->InSimulation = -1;
-  LoadStateFromWowContext(GetTLS().ThreadState());
+  TLS TLS = GetTLS();
+  TLS.CpuArea()->InSimulation = -1;
+  LoadStateFromWowContext(TLS.ThreadState());
 }
 
 void UnlockJITContext() {
-  CHPE_V2_CPU_AREA_INFO* CpuArea = GetCpuArea();
+  CHPE_V2_CPU_AREA_INFO* CpuArea = GetTLS().CpuArea();
   CpuArea->InSimulation = 0;
   if (*CpuArea->SuspendDoorbell) {
     CONTEXT ResumeContext;
@@ -527,7 +524,8 @@ void BTCpuProcessInit() {
   }
 
   {
-    auto HostFeatures = FEX::Windows::CPUFeatures::FetchHostFeatures(IsWine, FEXCore::HostFeatures::HostTypeEnum::Wow64);
+    auto HostFeatures =
+      FEX::Windows::CPUFeatures::FetchHostFeatures(IsWine, FEXCore::HostFeatures::HostTypeEnum::Wow64, FEX::Windows::UnixLib::GetPID());
     CTX = FEXCore::Context::Context::CreateNewContext(HostFeatures);
   }
 
@@ -579,7 +577,21 @@ void BTCpuProcessInit() {
   }
 }
 
-void BTCpuProcessTerm(HANDLE Handle, BOOL After, ULONG Status) {}
+void BTCpuProcessTerm(HANDLE Handle, BOOL After, ULONG Status) {
+  // NtTerminateProcess(NULL) stops peer threads before guest DLL detach runs.
+  // Drain compilation/invalidation and retain the locks across that syscall,
+  // so a terminated compiler cannot strand a reader during detach unmapping.
+  if (Handle || !CTX) {
+    return;
+  }
+  if (!After) {
+    ThreadCreationMutex.lock();
+    CTX->GetCodeInvalidationMutex().lock();
+  } else {
+    CTX->GetCodeInvalidationMutex().unlock();
+    ThreadCreationMutex.unlock();
+  }
+}
 
 void BTCpuThreadInit() {
   static constexpr size_t DefaultWow64CS {4};
@@ -610,7 +622,7 @@ void BTCpuThreadInit() {
   const auto TLS = GetTLS();
   TLS.ThreadState() = Thread;
 
-  Thread->FrontendPtr = new FrontendThreadData(Thread);
+  Thread->FrontendPtr = new FrontendThreadData(TLS);
 
   auto ThreadTID = GetCurrentThreadId();
   Threads.emplace(ThreadTID, Thread);
@@ -624,18 +636,23 @@ void BTCpuThreadTerm(HANDLE Thread, LONG ExitCode) {
     return;
   }
 
-  auto ThreadDup = FEX::Windows::DupHandle(Thread, THREAD_QUERY_INFORMATION | THREAD_SUSPEND_RESUME);
+  auto ThreadDup = FEX::Windows::DupHandle(Thread, THREAD_QUERY_INFORMATION | THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT);
 
   THREAD_BASIC_INFORMATION Info;
   if (auto Err = NtQueryInformationThread(*ThreadDup, ThreadBasicInformation, &Info, sizeof(Info), nullptr); Err) {
     return;
   }
 
+  LogMan::Msg::IFmt("Terminating {}", Info.ClientId.UniqueThread);
   const auto ThreadTID = reinterpret_cast<uint64_t>(Info.ClientId.UniqueThread);
   bool Self = ThreadTID == GetCurrentThreadId();
   if (!Self) {
+    CONTEXT TmpContext;
     // If we are suspending a thread that isn't ourselves, try to suspend it first so we know internal JIT locks aren't being held.
     RtlWow64SuspendThread(*ThreadDup, NULL);
+    // This will wait for the thread to be suspended
+    TmpContext.ContextFlags = CONTEXT_CONTROL;
+    NtGetContextThread(*ThreadDup, &TmpContext);
   }
 
   auto [Err, TLS] = GetThreadTLS(*ThreadDup);
@@ -658,6 +675,7 @@ void BTCpuThreadTerm(HANDLE Thread, LONG ExitCode) {
   }
   auto ThreadState = TLS.ThreadState();
 
+  TLS.CpuArea() = nullptr;
   delete GetFrontendThreadData(ThreadState);
 
   // GDT and LDT are mirrored, only free one.

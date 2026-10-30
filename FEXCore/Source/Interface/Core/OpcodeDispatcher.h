@@ -363,7 +363,8 @@ public:
   void MOVVectorUnalignedOp(OpcodeArgs);
   void MOVVectorUnalignedNoNopOp(OpcodeArgs);
   void MOVVectorNTOp(OpcodeArgs, bool IsAVX);
-  void ALUOp(OpcodeArgs, FEXCore::IR::IROps ALUIROp, FEXCore::IR::IROps AtomicFetchOp, unsigned SrcIdx);
+  void ALURAXOp(OpcodeArgs, FEXCore::IR::IROps ALUIROp);
+  void ALUOp(OpcodeArgs, FEXCore::IR::IROps ALUIROp, FEXCore::IR::IROps AtomicFetchOp, unsigned SrcIdx, bool DestRAX);
   void LSLOp(OpcodeArgs);
   void INTOp(OpcodeArgs);
   void SyscallOp(OpcodeArgs, bool IsSyscallInst);
@@ -374,8 +375,8 @@ public:
   void IRETOp(OpcodeArgs);
   void CallbackReturnOp(OpcodeArgs);
   void SecondaryALUOp(OpcodeArgs);
-  void ADCOp(OpcodeArgs, uint32_t SrcIndex);
-  void SBBOp(OpcodeArgs, uint32_t SrcIndex);
+  void ADCOp(OpcodeArgs, uint32_t SrcIndex, bool DestRAX);
+  void SBBOp(OpcodeArgs, uint32_t SrcIndex, bool DestRAX);
   void SALCOp(OpcodeArgs);
   void PUSHOp(OpcodeArgs);
   void PUSHREGOp(OpcodeArgs);
@@ -395,12 +396,12 @@ public:
   void JUMPFARIndirectOp(OpcodeArgs);
   void CALLFARIndirectOp(OpcodeArgs);
   void RETFARIndirectOp(OpcodeArgs);
-  void TESTOp(OpcodeArgs, uint32_t SrcIndex);
+  void TESTOp(OpcodeArgs, uint32_t SrcIndex, bool DestRAX);
   void ARPLOp(OpcodeArgs);
   void MOVSXDOp(OpcodeArgs);
   void MOVSXOp(OpcodeArgs);
   void MOVZXOp(OpcodeArgs);
-  void CMPOp(OpcodeArgs, uint32_t SrcIndex);
+  void CMPOp(OpcodeArgs, uint32_t SrcIndex, bool DestRAX);
   void SETccOp(OpcodeArgs);
   void CQOOp(OpcodeArgs);
   void CDQOp(OpcodeArgs);
@@ -428,11 +429,11 @@ public:
   void RotateOp(OpcodeArgs, bool Left, bool IsImmediate, bool Is1Bit);
   void RCROp1Bit(OpcodeArgs);
   void RCROp8x1Bit(OpcodeArgs);
-  void RCROp(OpcodeArgs);
-  void RCRSmallerOp(OpcodeArgs);
+  void RCROp(OpcodeArgs, bool UseRCX);
+  void RCRSmallerOp(OpcodeArgs, bool UseRCX);
   void RCLOp1Bit(OpcodeArgs);
-  void RCLOp(OpcodeArgs);
-  void RCLSmallerOp(OpcodeArgs);
+  void RCLOp(OpcodeArgs, bool UseRCX);
+  void RCLSmallerOp(OpcodeArgs, bool UseRCX);
 
   void BTOp(OpcodeArgs, uint32_t SrcIndex, enum BTAction Action);
 
@@ -745,7 +746,7 @@ public:
   void X87FLDCW(OpcodeArgs);
   void X87FNSAVE(OpcodeArgs);
   void X87FNSTENV(OpcodeArgs);
-  void X87FNSTSW(OpcodeArgs);
+  void X87FNSTSW(OpcodeArgs, bool DestRAX);
   void X87FRSTOR(OpcodeArgs);
   void X87FSTCW(OpcodeArgs);
   void X87FXAM(OpcodeArgs);
@@ -1083,8 +1084,9 @@ public:
   void AVX128_VFMAScalarImpl(OpcodeArgs, IROps IROp, uint8_t Src1Idx, uint8_t Src2Idx, uint8_t AddendIdx);
   void AVX128_VFMAddSubImpl(OpcodeArgs, bool AddSub, uint8_t Src1Idx, uint8_t Src2Idx, uint8_t AddendIdx);
 
-  RefPair AVX128_VPGatherQPSImpl(OpcodeArgs, Ref Dest, Ref Mask, RefVSIB VSIB);
-  RefPair AVX128_VPGatherImpl(OpcodeArgs, OpSize Size, OpSize ElementLoadSize, OpSize AddrElementSize, RefPair Dest, RefPair Mask, RefVSIB VSIB);
+  RefPair AVX128_VPGatherQPSImpl(OpcodeArgs, Ref Dest, Ref Mask, RefVSIB VSIB, bool MaskAllOnes);
+  RefPair AVX128_VPGatherImpl(OpcodeArgs, OpSize Size, OpSize ElementLoadSize, OpSize AddrElementSize, RefPair Dest, RefPair Mask,
+                              RefVSIB VSIB, bool MaskAllOnesLow = false, bool MaskAllOnesHigh = false);
 
   void AVX128_VPGATHER(OpcodeArgs, OpSize AddrElementSize);
 
@@ -1177,6 +1179,11 @@ public:
     // At block boundaries, fix up the carry flag.
     if (!SRAOnly) {
       RectifyCarryInvert(CFInvertedABI);
+
+      // Also we can't trust the LastDef accross block boundaries, so clear that as well.
+      for (auto& Def : RegCache.LastDef) {
+        Def = nullptr;
+      }
     }
 
     if (!MMXOnly) {
@@ -1391,6 +1398,11 @@ private:
                     const X86Tables::DecodedOperand& Imm, bool IsAVX);
 
   void PCMPXSTRXOpImpl(OpcodeArgs, bool IsExplicit, bool IsMask, bool IsAVX);
+  Ref PCMPXSTRXSaturateExplicitLength(IR::OpSize ElementSize, IR::OpSize LengthSize, Ref RawLength);
+  Ref PCMPXSTRXEqualAny(IR::OpSize ElementSize, Ref Src1, Ref Src2, Ref Src1ValidElements, Ref Src2ValidElements);
+  Ref PCMPXSTRXRanges(IR::OpSize ElementSize, Ref Src1, Ref Src2, Ref Src1ValidElements, Ref Src2ValidElements, bool IsSigned);
+  Ref PCMPXSTRXEqualEach(IR::OpSize ElementSize, Ref Src1, Ref Src2, Ref Src1ValidElements, Ref Src2ValidElements);
+  Ref PCMPXSTRXEqualOrdered(IR::OpSize ElementSize, Ref Src1, Ref Src2, Ref Src1Length, Ref Src2Length, Ref Src1ValidElements, Ref Indices);
 
   Ref PHADDSOpImpl(OpSize Size, Ref Src1, Ref Src2);
 
@@ -1957,12 +1969,17 @@ private:
     uint64_t Partial;
 
     Ref Value[64];
+
+    // Keep track of where each register was last written to within the current block,
+    // for use in peephole optimizations.
+    Ref LastDef[64];
   } RegCache {};
 
   void InvalidateReg(uint8_t Index) {
     uint64_t Bit = (1ull << (uint64_t)Index);
     RegCache.Cached &= ~Bit;
     RegCache.Written &= ~Bit;
+    RegCache.LastDef[Index] = nullptr;
   }
 
   Ref LoadRegCache(uint64_t Offset, uint8_t Index, RegClass Class, IR::OpSize Size) {
@@ -2078,6 +2095,7 @@ private:
     RegCache.Value[Index] = Value;
     RegCache.Cached |= Bit;
     RegCache.Written |= Bit;
+    RegCache.LastDef[Index] = Value;
   }
 
   void InvalidateHighAVXRegisters() {

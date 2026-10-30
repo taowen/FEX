@@ -141,6 +141,14 @@
           "Hides hybrid CPU core arrangement."
         ]
       },
+      "SoftwareRNG": {
+        "Type": "bool",
+        "Default": "false",
+        "AffectsCodeGen": "true",
+        "Desc": [
+          "Emulates RDRAND and RDSEED in software when the host does not implement FEAT_RNG."
+        ]
+      },
       "CPUFeatureRegisters": {
         "Type": "str",
         "Default": "",
@@ -190,6 +198,14 @@
           "Attempt to cache anonymous code"
         ]
       },
+      "DiskCacheMemorySize": {
+        "Type": "uint32",
+        "Default": "0",
+        "AffectsCodeGen": "false",
+        "Desc": [
+          "How much memory, if any, to use as a cache for the cache"
+        ]
+      },
       "DiskCachePath": {
         "Type": "str",
         "Default": "",
@@ -204,6 +220,23 @@
         "AffectsCodeGen": "false",
         "Desc": [
           "Optional list of extra read-only disk cache DBs to consider"
+        ]
+      },
+      "DiskCacheMaxFileSize": {
+        "Type": "uint64",
+        "Default": "1073741824",
+        "AffectsCodeGen": "false",
+        "Desc": [
+          "Size limit on the main cache file - index not included. Default 1G"
+        ]
+      },
+      "DiskCachePruneStaleEntries": {
+        "Type": "bool",
+        "Default": "true",
+        "AffectsCodeGen": "false",
+        "Desc": [
+          "Allows FEX to prune stale disk cache entries on startup.",
+          "Frees space by removing cache entries associated with old FEX versions."
         ]
       }
     },
